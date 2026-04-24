@@ -13,38 +13,46 @@ const path     = require('path');
 const os       = require('os');
 
 const app  = express();
-const PORT = process.env.PORT || 19099; // Local execution server
+const PORT = process.env.PORT || 3000; // ✅ Dynamic port for Render/Railway
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
-/* ── Serve static files (so you can open via http://localhost:3001) ── */
+/* ── Serve static files (so you can open via http://localhost:3000) ── */
 app.use(express.static(path.join(__dirname)));
 
 /* ── Auto-detect Python path ── */
 function findPython() {
+  const isWindows = os.platform() === 'win32';
+
   const candidates = [
     'python3',
     'python',
-    // Common Windows locations
-    process.env.LOCALAPPDATA + '\\Programs\\Python\\Python311\\python.exe',
-    process.env.LOCALAPPDATA + '\\Programs\\Python\\Python312\\python.exe',
-    process.env.LOCALAPPDATA + '\\Programs\\Python\\Python310\\python.exe',
-    'C:\\Python311\\python.exe',
-    'C:\\Python312\\python.exe',
-    'C:\\Python310\\python.exe',
-    // Windows Store Python
-    process.env.USERPROFILE + '\\AppData\\Local\\Microsoft\\WindowsApps\\python3.exe',
-    // Mac/Linux
-    '/usr/bin/python3',
-    '/usr/local/bin/python3',
-    '/opt/homebrew/bin/python3',
   ];
+
+  // Add Windows-specific paths only on Windows
+  if (isWindows) {
+    candidates.push(
+      process.env.LOCALAPPDATA + '\\Programs\\Python\\Python311\\python.exe',
+      process.env.LOCALAPPDATA + '\\Programs\\Python\\Python312\\python.exe',
+      process.env.LOCALAPPDATA + '\\Programs\\Python\\Python310\\python.exe',
+      'C:\\Python311\\python.exe',
+      'C:\\Python312\\python.exe',
+      'C:\\Python310\\python.exe',
+      process.env.USERPROFILE + '\\AppData\\Local\\Microsoft\\WindowsApps\\python3.exe',
+    );
+  } else {
+    // Mac/Linux paths
+    candidates.push(
+      '/usr/bin/python3',
+      '/usr/local/bin/python3',
+      '/opt/homebrew/bin/python3',
+    );
+  }
 
   for (const candidate of candidates) {
     try {
-      // Quote path to handle spaces
-      const quoted = candidate.includes(' ') ? `"${candidate}"` : candidate;
+      const quoted  = candidate.includes(' ') ? `"${candidate}"` : candidate;
       const version = execSync(`${quoted} --version 2>&1`, { timeout: 3000 }).toString().trim();
       if (version.toLowerCase().includes('python')) {
         console.log(`✅ Python found: ${candidate} (${version})`);
@@ -71,7 +79,7 @@ app.post('/execute', (req, res) => {
   const { code } = req.body;
 
   if (!code || typeof code !== 'string') {
-    return res.status(400).json({ stdout:'', stderr:'Error: No code provided', exitCode:1 });
+    return res.status(400).json({ stdout: '', stderr: 'Error: No code provided', exitCode: 1 });
   }
 
   if (!PYTHON_PATH) {
@@ -88,23 +96,25 @@ app.post('/execute', (req, res) => {
   try {
     fs.writeFileSync(tempFile, code, 'utf8');
   } catch (e) {
-    return res.status(500).json({ stdout:'', stderr:`Failed to write temp file: ${e.message}`, exitCode:1 });
+    return res.status(500).json({ stdout: '', stderr: `Failed to write temp file: ${e.message}`, exitCode: 1 });
   }
 
   const quotedPython = PYTHON_PATH.includes(' ') ? `"${PYTHON_PATH}"` : PYTHON_PATH;
   const quotedFile   = `"${tempFile}"`;
-  const cmd          = `${quotedPython} ${quotedFile}`;
 
-  exec(
-  `set PYTHONIOENCODING=utf-8 && "C:\\Users\\Hp\\AppData\\Local\\Programs\\Python\\Python311\\python.exe" "${tempFile}"`,
-  { timeout: 10000 },
-  (error, stdout, stderr) => {
+  // ✅ Cross-platform command (no hardcoded Windows path)
+  const isWindows = os.platform() === 'win32';
+  const cmd = isWindows
+    ? `set PYTHONIOENCODING=utf-8 && ${quotedPython} ${quotedFile}`
+    : `PYTHONIOENCODING=utf-8 ${quotedPython} ${quotedFile}`;
+
+  exec(cmd, { timeout: 10000 }, (error, stdout, stderr) => {
     // Always clean up temp file
     try { fs.unlinkSync(tempFile); } catch (e) {}
 
     res.json({
-      stdout:   stdout  || '',
-      stderr:   stderr  || '',
+      stdout:   stdout   || '',
+      stderr:   stderr   || '',
       exitCode: error?.code ?? 0
     });
   });
@@ -115,11 +125,12 @@ app.get('/status', (req, res) => {
   res.json({
     ok: true,
     python: PYTHON_PATH || null,
+    platform: os.platform(),
     version: PYTHON_PATH ? (() => {
       try {
         const q = PYTHON_PATH.includes(' ') ? `"${PYTHON_PATH}"` : PYTHON_PATH;
         return execSync(`${q} --version 2>&1`).toString().trim();
-      } catch(e) { return 'unknown'; }
+      } catch (e) { return 'unknown'; }
     })() : null
   });
 });
