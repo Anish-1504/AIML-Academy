@@ -13,7 +13,7 @@ const path     = require('path');
 const os       = require('os');
 
 const app  = express();
-const PORT = process.env.PORT || 3000; // ✅ Dynamic port for Render/Railway
+const PORT = localhost:3000 ; // ✅ Dynamic port for Render/Railway
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
