@@ -1,5 +1,5 @@
 [README.md](https://github.com/user-attachments/files/27055486/README.md)
-# AIML::ACADEMY — Hacker Edition
+# AIML:ACADEMY — Hacker Edition
 > Your complete 3-month pipeline from Python beginner to AIML Engineer.
 
 ---
